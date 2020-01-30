@@ -22,11 +22,12 @@ function taskMarker(fn, name, description) {
 const TaskBuilder = {
     clean: (dest) => taskMarker(() => del(dest), 'clean', 'Clear output directory'),
     scripts: (entries, dest, scriptDir, webpackConfig, terserConfig, useSourcemaps, useMinify) => taskMarker(() => {
-        const files = Object.values(entries)
-        webpackConfig.entry = entries
-        webpackConfig.mode = useMinify ? 'production' : 'development'
-        terserConfig.sourceMap = useSourcemaps
-        if (useMinify) webpackConfig.plugins.push(new Terser(terserConfig))
+        const files = Object.values(entries);
+        webpackConfig.entry = entries;
+        webpackConfig.mode = useMinify ? 'production' : 'development';
+        if (useSourcemaps) webpackConfig.devtool = 'cheap-source-map';
+        terserConfig.sourceMap = useSourcemaps;
+        if (useMinify) webpackConfig.plugins.push(new Terser(terserConfig));
         return gulp.src(files)
             .pipe(gulpWebpack(webpackConfig))
             .pipe(gulp.dest(join(dest, scriptDir)));
