@@ -36,7 +36,6 @@ const TaskBuilder = {
         const files = Object.values(entries)
         const reverse = Object.keys(entries).reduce((a, key) => ({ ...a, [entries[key]]: key }), {})
         const nameResolver = path => {
-            console.log('resolver', path);
             const oldname = files.find(filename => filename.includes(path.basename))
             const newname = reverse[oldname];
             if (newname) path.basename = newname;
@@ -95,7 +94,6 @@ module.exports = class GulpMeister {
         this.babelConfig = {}
         this.terserConfig = { sourceMap: false }
         this.flags = {
-            serve: false,
             watch: false,
             minify: false,
             manifest: false,
@@ -145,7 +143,7 @@ module.exports = class GulpMeister {
 
     setBrowserSyncConfig(config) {
         this.browsersyncConfig = config
-        this.flags.serve = this.flags.watch = true
+        this.flags.watch = true
         return this
     }
 
@@ -188,13 +186,15 @@ module.exports = class GulpMeister {
     build() {
         const styles = TaskBuilder.styles(this.styleEntries, this.destinationPath, this.styleDir, this.postcssConfig, this.flags.sourcemaps, this.flags.minify)
         const scripts = TaskBuilder.scripts(this.scriptEntries, this.destinationPath, this.scriptDir, this.webpackConfig, this.terserConfig, this.flags.sourcemaps, this.flags.minify)
-        const watchTasks = []
-        if (this.flags.watch) watchTasks.push(TaskBuilder.watcher(this.sourcePath, styles, scripts))
-        if (this.flags.serve) watchTasks.push(TaskBuilder.browserSync(this.browsersyncConfig))
+        const compile = gulp.parallel(styles, scripts)
+        let overseerTasks = []
+        if (this.flags.watch) overseerTasks.push(TaskBuilder.watcher(this.sourcePath, styles, scripts))
+        if (this.browsersyncConfig !== null) overseerTasks.push(TaskBuilder.browserSync(this.browsersyncConfig))
+        let overseer = overseerTasks.length ? gulp.parallel(...overseerTasks) : Promise.resolve
         return gulp.task(this.taskName, gulp.series(
             TaskBuilder.clean(this.destinationPath),
-            gulp.parallel(styles, scripts),
-            gulp.parallel(...watchTasks)
+            compile,
+            overseer,
         ));
     }
 }
