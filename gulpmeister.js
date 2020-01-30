@@ -52,16 +52,14 @@ const TaskBuilder = {
             .pipe(gulpIf(useSourcemaps, sourcemaps.write('.', { sourceRoot: finaldest })))
             .pipe(gulp.dest(finaldest))
     }, 'styles'),
-    browserSync: (dest, browsersyncConfig) => () => {
+    browserSync: (dest, browsersyncConfig) => taskMarker(() => {
         browserSync.init(browsersyncConfig);
         browserSync.watch(dest + '/**/*.*', browserSync.reload);
-    },
-    watcher: (srcPath, styleTask, scriptTask, useVue) => () => {
-        const scriptExts = ['js', 'mjs', 'es6'];
-        if (useVue) scriptExts.push('vue');
-        gulp.watch(srcPath + '/**/*.{scss, sass}', styleTask);
-        gulp.watch(srcPath + `/**/*.{${scriptExts.join(', ')}}`, scriptTask);
-    },
+    }, 'browsersync'),
+    watcher: (srcPath, styleTask, scriptTask) => taskMarker(() => {
+        gulp.watch(join(srcPath, '/**/*.{scss, sass}'), styleTask);
+        gulp.watch(join(srcPath, '/**/*.{js, mjs, es6}'), scriptTask);
+    }, 'watcher'),
     manifestGenerator: () => () => {},
 }
 
@@ -74,7 +72,7 @@ module.exports = class GulpMeister {
         this.scriptDir = './'
         this.styleEntries = {}
         this.scriptEntries = {}
-        this.browsersyncConfig = {}
+        this.browsersyncConfig = null
         this.webpackConfig = {
             output: {
                 filename: "[name].js",
@@ -97,11 +95,17 @@ module.exports = class GulpMeister {
         this.babelConfig = {}
         this.terserConfig = { sourceMap: false }
         this.flags = {
+            serve: false,
             watch: false,
             minify: false,
             manifest: false,
             sourcemaps: false,
         }
+    }
+
+    setSourcePath(path) {
+        this.sourcePath = path
+        return this
     }
 
     setDestinationPath(path) {
@@ -139,6 +143,12 @@ module.exports = class GulpMeister {
         return this
     }
 
+    setBrowserSyncConfig(config) {
+        this.browsersyncConfig = config
+        this.flags.serve = this.flags.watch = true
+        return this
+    }
+
     addStyleEntry(path, name) {
         this.styleEntries[name] = path
         return this
@@ -149,24 +159,23 @@ module.exports = class GulpMeister {
         return this
     }
 
-    useMinify(flag = true) {
-        this.flags.minify = flag
+    useMinify() {
+        this.flags.minify = true
         return this
     }
 
-    useWatcher(browsersyncConfig) {
-        this.browsersyncConfig = browsersyncConfig
+    useWatcher() {
         this.flags.watch = true
         return this
     }
 
-    writeManifest(flag = true) {
-        this.flags.manifest = flag
+    writeManifest() {
+        this.flags.manifest = true
         return this
     }
 
-    writeSourcemap(flag = true) {
-        this.flags.sourcemaps = flag
+    writeSourcemap() {
+        this.flags.sourcemaps = true
         return this
     }
 
@@ -177,14 +186,15 @@ module.exports = class GulpMeister {
     }
 
     build() {
-        // console.log(this)
+        const styles = TaskBuilder.styles(this.styleEntries, this.destinationPath, this.styleDir, this.postcssConfig, this.flags.sourcemaps, this.flags.minify)
+        const scripts = TaskBuilder.scripts(this.scriptEntries, this.destinationPath, this.scriptDir, this.webpackConfig, this.terserConfig, this.flags.sourcemaps, this.flags.minify)
+        const watchTasks = []
+        if (this.flags.watch) watchTasks.push(TaskBuilder.watcher(this.sourcePath, styles, scripts))
+        if (this.flags.serve) watchTasks.push(TaskBuilder.browserSync(this.browsersyncConfig))
         return gulp.task(this.taskName, gulp.series(
             TaskBuilder.clean(this.destinationPath),
-            gulp.parallel(
-                TaskBuilder.styles(this.styleEntries, this.destinationPath, this.styleDir, this.postcssConfig, this.flags.sourcemaps, this.flags.minify),
-                TaskBuilder.scripts(this.scriptEntries, this.destinationPath, this.scriptDir, this.webpackConfig, this.terserConfig, this.flags.sourcemaps, this.flags.minify)
-            )//,
-            // gulp.parallel(TaskBuilder.watcher(), TaskBuilder.browserSync())
+            gulp.parallel(styles, scripts),
+            gulp.parallel(...watchTasks)
         ));
     }
 }
