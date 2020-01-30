@@ -13,9 +13,15 @@ const magicImporter = require('node-sass-magic-importer');
 
 sass.compiler = require('sass');
 
+function taskMarker(fn, name, description) {
+    if (name) fn.displayName = name
+    if (description) fn.description = description
+    return fn
+}
+
 const TaskBuilder = {
-    clean: (dest) => () => del(dest),
-    scripts: (entries, dest, scriptDir, webpackConfig, terserConfig, useSourcemaps, useMinify) => () => {
+    clean: (dest) => taskMarker(() => del(dest), 'clean', 'Clear output directory'),
+    scripts: (entries, dest, scriptDir, webpackConfig, terserConfig, useSourcemaps, useMinify) => taskMarker(() => {
         const files = Object.values(entries)
         webpackConfig.entry = entries
         webpackConfig.mode = useMinify ? 'production' : 'development'
@@ -24,8 +30,8 @@ const TaskBuilder = {
         return gulp.src(files)
             .pipe(gulpWebpack(webpackConfig))
             .pipe(gulp.dest(join(dest, scriptDir)));
-    },
-    styles: (entries, dest, styleDir, postcssConfig, useSourcemaps, useMinify) => () => {
+    }, 'scripts'),
+    styles: (entries, dest, styleDir, postcssConfig, useSourcemaps, useMinify) => taskMarker(() => {
         const files = Object.values(entries)
         const reverse = Object.keys(entries).reduce((a, key) => ({ ...a, [entries[key]]: key }), {})
         const nameResolver = path => {
@@ -33,7 +39,6 @@ const TaskBuilder = {
             const oldname = files.find(filename => filename.includes(path.basename))
             const newname = reverse[oldname];
             if (newname) path.basename = newname;
-
             return path;
         }
 
@@ -42,12 +47,10 @@ const TaskBuilder = {
         return gulp.src(files)
             .pipe(rename(nameResolver))
             .pipe(gulpIf(useSourcemaps, sourcemaps.init()))
-            .pipe(sass({
-                importer: magicImporter(),
-            }).on('error', sass.logError))
+            .pipe(sass({ importer: magicImporter() }).on('error', sass.logError))
             .pipe(gulpIf(useSourcemaps, sourcemaps.write('.', { sourceRoot: finaldest })))
             .pipe(gulp.dest(finaldest))
-    },
+    }, 'styles'),
     browserSync: (dest, browsersyncConfig) => () => {
         browserSync.init(browsersyncConfig);
         browserSync.watch(dest + '/**/*.*', browserSync.reload);
@@ -89,7 +92,7 @@ module.exports = class GulpMeister {
             },
             plugins: []
         }
-        this.postcssConfig = Object.assign({ syntax: 'postcss-scss', plugins: [] }, require('./postcss.config.js'))
+        this.postcssConfig = Object.assign({}, require('./postcss.config.js'))
         this.babelConfig = {}
         this.terserConfig = { sourceMap: false }
         this.flags = {
