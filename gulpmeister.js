@@ -166,6 +166,12 @@ module.exports = class GulpMeister {
         return this
     }
 
+    optional(condition, truth, falsy) {
+        if (condition) truth(this)
+        else falsy(this)
+        return this
+    }
+
     build() {
         // console.log(this)
         return gulp.task(this.taskName, gulp.series(
