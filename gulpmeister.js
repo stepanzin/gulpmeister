@@ -7,6 +7,11 @@ const gulpWebpack = require('webpack-stream');
 const browserSync = require('browser-sync').create();
 const { join } = require('path');
 const Terser = require('terser-webpack-plugin');
+const sass = require('gulp-sass');
+const gulpIf = require("gulp-if");
+const magicImporter = require('node-sass-magic-importer');
+
+sass.compiler = require('sass');
 
 const TaskBuilder = {
     clean: (dest) => () => del(dest),
@@ -24,22 +29,24 @@ const TaskBuilder = {
         const files = Object.values(entries)
         const reverse = Object.keys(entries).reduce((a, key) => ({ ...a, [entries[key]]: key }), {})
         const nameResolver = path => {
-            const oldname = files.find(filename => filename.includes(path.basename + path.extname))
-            path.basename = reverse[oldname];
-            path.extname = '.css';
+            console.log('resolver', path);
+            const oldname = files.find(filename => filename.includes(path.basename))
+            const newname = reverse[oldname];
+            if (newname) path.basename = newname;
+
             return path;
         }
-        
-        // TODO: need assign?
-        let task = gulp.src(files)
-        if (useSourcemaps) task = task.pipe(sourcemaps.init())
-        if (useMinify) postcssConfig.plugins.push(require("cssnano")())
-        console.log(postcssConfig)
-        task = task.pipe(postcss(postcssConfig))
-        if (useSourcemaps) task = task.pipe(sourcemaps.write())
-        return task
+
+        const finaldest = join(dest, styleDir);
+
+        return gulp.src(files)
             .pipe(rename(nameResolver))
-            .pipe(gulp.dest(join(dest, styleDir)))
+            .pipe(gulpIf(useSourcemaps, sourcemaps.init()))
+            .pipe(sass({
+                importer: magicImporter(),
+            }).on('error', sass.logError))
+            .pipe(gulpIf(useSourcemaps, sourcemaps.write('.', { sourceRoot: finaldest })))
+            .pipe(gulp.dest(finaldest))
     },
     browserSync: (dest, browsersyncConfig) => () => {
         browserSync.init(browsersyncConfig);
