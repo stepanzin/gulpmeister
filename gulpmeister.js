@@ -191,7 +191,10 @@ module.exports = class GulpMeister {
         // overseerTasks - tasks that watch for changes (e.g. watcher, browserSync)
         let overseerTasks = [];
         if (this.flags.watch) overseerTasks.push(TaskBuilder.watcher(this.sourcePath, styles, scripts));
-        if (this.browsersyncConfig !== null) overseerTasks.push(TaskBuilder.browserSync(this.browsersyncConfig));
+        if (this.browsersyncConfig !== null) {
+            // TODO: Move hardcoded string to this.browserSyncWatchFolder variable
+            overseerTasks.push(TaskBuilder.browserSync('./dist', this.browsersyncConfig));
+        }
 
         // tasksList - list of tasks to be passed as arguments to gulp.series
         let tasksList = [TaskBuilder.clean(this.destinationPath), buildTasks];

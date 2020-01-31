@@ -1,6 +1,13 @@
-const GulpMeister = require('./gulpmeister')
+const GulpMeister = require('./gulpmeister');
 
-const fakeProductionFlag = true
+const fakeProductionFlag = false;
+
+const exampleBrowserSyncConfig = {
+    port: 3304,
+    server: './dist',
+    logPrefix: 'BrowserSync',
+    logConnections: true,
+};
 
 new GulpMeister()
     .setSourcePath('./src/assets')
@@ -14,6 +21,8 @@ new GulpMeister()
         productionContext => {
             productionContext.useMinify()
         }, developContext => {
-            developContext.writeSourcemap().useWatcher()
+            developContext
+                .setBrowserSyncConfig(exampleBrowserSyncConfig)
+                .writeSourcemap().useWatcher()
         })
-    .build()
+    .build();
