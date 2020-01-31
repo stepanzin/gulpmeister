@@ -21,6 +21,7 @@ function taskMarker(fn, name, description) {
 
 const TaskBuilder = {
     clean: (dest) => taskMarker(() => del(dest), 'clean', 'Clear output directory'),
+
     scripts: (entries, dest, scriptDir, webpackConfig, terserConfig, useSourcemaps, useMinify) => taskMarker(() => {
         const files = Object.values(entries);
         webpackConfig.entry = entries;
@@ -32,6 +33,7 @@ const TaskBuilder = {
             .pipe(gulpWebpack(webpackConfig))
             .pipe(gulp.dest(join(dest, scriptDir)));
     }, 'scripts'),
+
     styles: (entries, dest, styleDir, useSourcemaps, useMinify) => taskMarker(() => {
         const files = Object.values(entries);
         const reverse = Object.keys(entries).reduce((a, key) => ({ ...a, [entries[key]]: key }), {});
@@ -53,14 +55,17 @@ const TaskBuilder = {
             .pipe(gulpIf(useSourcemaps, sourcemaps.write('.', { sourceRoot: finaldest })))
             .pipe(gulp.dest(finaldest))
     }, 'styles'),
+
     browserSync: (dest, browsersyncConfig) => taskMarker(() => {
         browserSync.init(browsersyncConfig);
         browserSync.watch(dest + '/**/*.*', browserSync.reload);
     }, 'browsersync'),
+
     watcher: (srcPath, styleTask, scriptTask) => taskMarker(() => {
         gulp.watch(join(srcPath, '/**/*.{scss, sass}'), styleTask);
         gulp.watch(join(srcPath, '/**/*.{js, mjs, es6}'), scriptTask);
     }, 'watcher'),
+
     manifestGenerator: () => () => {},
 };
 
