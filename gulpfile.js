@@ -1,6 +1,6 @@
 const GulpMeister = require('./gulpmeister')
 
-const fakeProductionFlag = false
+const fakeProductionFlag = true
 
 new GulpMeister()
     .setSourcePath('./src/assets')

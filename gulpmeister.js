@@ -196,15 +196,21 @@ module.exports = class GulpMeister {
             this.flags.sourcemaps,
             this.flags.minify,
         );
-        const compile = gulp.parallel(styles, scripts);
-        let overseerTasks = []
-        if (this.flags.watch) overseerTasks.push(TaskBuilder.watcher(this.sourcePath, styles, scripts))
-        if (this.browsersyncConfig !== null) overseerTasks.push(TaskBuilder.browserSync(this.browsersyncConfig))
-        let overseer = overseerTasks.length ? gulp.parallel(...overseerTasks) : taskMarker(() => Promise.resolve(), 'skip')
+
+        // buildTasks - tasks that build assets
+        const buildTasks = gulp.parallel(styles, scripts);
+
+        // overseerTasks - tasks that watch for changes (e.g. watcher, browserSync)
+        let overseerTasks = [];
+        if (this.flags.watch) overseerTasks.push(TaskBuilder.watcher(this.sourcePath, styles, scripts));
+        if (this.browsersyncConfig !== null) overseerTasks.push(TaskBuilder.browserSync(this.browsersyncConfig));
+
+        // tasksList - list of tasks to be passed as arguments to gulp.series
+        let tasksList = [TaskBuilder.clean(this.destinationPath), buildTasks];
+        if (overseerTasks.length > 0) tasksList.push(gulp.parallel(...overseerTasks));
+
         return gulp.task(this.taskName, gulp.series(
-            TaskBuilder.clean(this.destinationPath),
-            compile,
-            overseer,
+            ...tasksList
         ));
     }
-}
+};
