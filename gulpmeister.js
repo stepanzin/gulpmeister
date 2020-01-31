@@ -32,7 +32,7 @@ const TaskBuilder = {
             .pipe(gulpWebpack(webpackConfig))
             .pipe(gulp.dest(join(dest, scriptDir)));
     }, 'scripts'),
-    styles: (entries, dest, styleDir, postcssConfig, useSourcemaps, useMinify) => taskMarker(() => {
+    styles: (entries, dest, styleDir, useSourcemaps, useMinify) => taskMarker(() => {
         const files = Object.values(entries)
         const reverse = Object.keys(entries).reduce((a, key) => ({ ...a, [entries[key]]: key }), {})
         const nameResolver = path => {
@@ -43,11 +43,13 @@ const TaskBuilder = {
         }
 
         const finaldest = join(dest, styleDir);
+        const contextOptions = { useMinify };
 
         return gulp.src(files)
             .pipe(rename(nameResolver))
             .pipe(gulpIf(useSourcemaps, sourcemaps.init()))
             .pipe(sass({ importer: magicImporter() }).on('error', sass.logError))
+            .pipe(postcss(contextOptions))
             .pipe(gulpIf(useSourcemaps, sourcemaps.write('.', { sourceRoot: finaldest })))
             .pipe(gulp.dest(finaldest))
     }, 'styles'),
@@ -90,7 +92,6 @@ module.exports = class GulpMeister {
             },
             plugins: []
         }
-        this.postcssConfig = Object.assign({}, require('./postcss.config.js'))
         this.babelConfig = {}
         this.terserConfig = { sourceMap: false }
         this.flags = {
@@ -123,11 +124,6 @@ module.exports = class GulpMeister {
 
     setWebpackConfig(config) {
         this.webpackConfig = config
-        return this
-    }
-
-    setPostCSSConfig(config) {
-        this.postcssConfig = config
         return this
     }
 
@@ -184,13 +180,27 @@ module.exports = class GulpMeister {
     }
 
     build() {
-        const styles = TaskBuilder.styles(this.styleEntries, this.destinationPath, this.styleDir, this.postcssConfig, this.flags.sourcemaps, this.flags.minify)
-        const scripts = TaskBuilder.scripts(this.scriptEntries, this.destinationPath, this.scriptDir, this.webpackConfig, this.terserConfig, this.flags.sourcemaps, this.flags.minify)
-        const compile = gulp.parallel(styles, scripts)
+        const styles = TaskBuilder.styles(
+            this.styleEntries,
+            this.destinationPath,
+            this.styleDir,
+            this.flags.sourcemaps,
+            this.flags.minify,
+        );
+        const scripts = TaskBuilder.scripts(
+            this.scriptEntries,
+            this.destinationPath,
+            this.scriptDir,
+            this.webpackConfig,
+            this.terserConfig,
+            this.flags.sourcemaps,
+            this.flags.minify,
+        );
+        const compile = gulp.parallel(styles, scripts);
         let overseerTasks = []
         if (this.flags.watch) overseerTasks.push(TaskBuilder.watcher(this.sourcePath, styles, scripts))
         if (this.browsersyncConfig !== null) overseerTasks.push(TaskBuilder.browserSync(this.browsersyncConfig))
-        let overseer = overseerTasks.length ? gulp.parallel(...overseerTasks) : Promise.resolve
+        let overseer = overseerTasks.length ? gulp.parallel(...overseerTasks) : taskMarker(() => Promise.resolve(), 'skip')
         return gulp.task(this.taskName, gulp.series(
             TaskBuilder.clean(this.destinationPath),
             compile,
