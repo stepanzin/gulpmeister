@@ -14,8 +14,8 @@ const magicImporter = require('node-sass-magic-importer');
 sass.compiler = require('sass');
 
 function taskMarker(fn, name, description) {
-    if (name) fn.displayName = name
-    if (description) fn.description = description
+    if (name) fn.displayName = name;
+    if (description) fn.description = description;
     return fn
 }
 
@@ -33,14 +33,14 @@ const TaskBuilder = {
             .pipe(gulp.dest(join(dest, scriptDir)));
     }, 'scripts'),
     styles: (entries, dest, styleDir, useSourcemaps, useMinify) => taskMarker(() => {
-        const files = Object.values(entries)
-        const reverse = Object.keys(entries).reduce((a, key) => ({ ...a, [entries[key]]: key }), {})
+        const files = Object.values(entries);
+        const reverse = Object.keys(entries).reduce((a, key) => ({ ...a, [entries[key]]: key }), {});
         const nameResolver = path => {
-            const oldname = files.find(filename => filename.includes(path.basename))
+            const oldname = files.find(filename => filename.includes(path.basename));
             const newname = reverse[oldname];
             if (newname) path.basename = newname;
             return path;
-        }
+        };
 
         const finaldest = join(dest, styleDir);
         const contextOptions = { useMinify };
@@ -62,38 +62,21 @@ const TaskBuilder = {
         gulp.watch(join(srcPath, '/**/*.{js, mjs, es6}'), scriptTask);
     }, 'watcher'),
     manifestGenerator: () => () => {},
-}
+};
 
 module.exports = class GulpMeister {
     constructor(taskName = 'default') {
-        this.taskName = taskName
-        this.sourcePath = null
-        this.destinationPath = null
-        this.styleDir = './'
-        this.scriptDir = './'
-        this.styleEntries = {}
-        this.scriptEntries = {}
-        this.browsersyncConfig = null
-        this.webpackConfig = {
-            output: {
-                filename: "[name].js",
-                chunkFilename: "[name].module.js"
-            },
-            optimization: {
-                splitChunks: {
-                    cacheGroups: {
-                        commons: {
-                            test: /[\\/]node_modules[\\/]/,
-                            name: 'vendors',
-                            chunks: 'all'
-                        }
-                    }
-                }
-            },
-            plugins: []
-        }
-        this.babelConfig = {}
-        this.terserConfig = { sourceMap: false }
+        this.taskName = taskName;
+        this.sourcePath = null;
+        this.destinationPath = null;
+        this.styleDir = './';
+        this.scriptDir = './';
+        this.styleEntries = {};
+        this.scriptEntries = {};
+        this.browsersyncConfig = null;
+        this.webpackConfig = require('./webpack.config.js');
+        this.babelConfig = {};
+        this.terserConfig = { sourceMap: false };
         this.flags = {
             watch: false,
             minify: false,
@@ -103,79 +86,79 @@ module.exports = class GulpMeister {
     }
 
     setSourcePath(path) {
-        this.sourcePath = path
+        this.sourcePath = path;
         return this
     }
 
     setDestinationPath(path) {
-        this.destinationPath = path
+        this.destinationPath = path;
         return this
     }
 
     setScriptDir(dir) {
-        this.scriptDir = dir
+        this.scriptDir = dir;
         return this
     }
 
     setStyleDir(dir) {
-        this.styleDir = dir
+        this.styleDir = dir;
         return this
     }
 
     setWebpackConfig(config) {
-        this.webpackConfig = config
+        this.webpackConfig = config;
         return this
     }
 
     setBabelConfig(config) {
-        this.babelConfig = config
+        this.babelConfig = config;
         return this
     }
 
     setTerserConfig(config) {
-        this.terserConfig = config
+        this.terserConfig = config;
         return this
     }
 
     setBrowserSyncConfig(config) {
-        this.browsersyncConfig = config
-        this.flags.watch = true
+        this.browsersyncConfig = config;
+        this.flags.watch = true;
         return this
     }
 
     addStyleEntry(path, name) {
-        this.styleEntries[name] = path
+        this.styleEntries[name] = path;
         return this
     }
 
     addScriptEntry(path, name) {
-        this.scriptEntries[name] = path
+        this.scriptEntries[name] = path;
         return this
     }
 
     useMinify() {
-        this.flags.minify = true
+        this.flags.minify = true;
         return this
     }
 
     useWatcher() {
-        this.flags.watch = true
+        this.flags.watch = true;
         return this
     }
 
     writeManifest() {
-        this.flags.manifest = true
+        this.flags.manifest = true;
         return this
     }
 
     writeSourcemap() {
-        this.flags.sourcemaps = true
+        this.flags.sourcemaps = true;
         return this
     }
 
     optional(condition, truth, falsy) {
-        if (condition) truth(this)
-        else falsy(this)
+        if (condition) truth(this);
+        else falsy(this);
         return this
     }
 
