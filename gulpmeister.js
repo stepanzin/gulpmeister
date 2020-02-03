@@ -12,6 +12,8 @@ const gulpIf = require("gulp-if");
 const magicImporter = require('node-sass-magic-importer');
 const glob = require ('glob');
 const chalk = require ('chalk');
+const { writeFile } = require('fs');
+const crypto = require('crypto');
 
 // Use dart-sass for compile styles
 sass.compiler = require('sass');
@@ -22,10 +24,35 @@ function taskMarker(fn, name, description) {
     return fn
 }
 
+function manifestGenerator(destinationPath, enabled) {
+    const manifestData = {};
+    const buildHash = crypto.createHash('md4').update(crypto.randomBytes(20)).digest('hex').slice(-20)
+    return {
+        memoize(files, ext, writeHash) {
+            const keys = Object.keys(files)
+            return rename(path => {
+                if (enabled) {
+                    keys.forEach(entityName => {
+                        if (path.basename.includes(entityName)) {
+                            if (writeHash) path.basename += `.${buildHash}`
+                            manifestData[`${entityName}.${ext}`] = path.basename + path.extname;
+                        }
+                    })
+                }
+                return path;
+            })
+        },
+        manifest(done) {
+            const manifestDest = join(__dirname, destinationPath, 'manifest.json')
+            writeFile(manifestDest, JSON.stringify(manifestData, null, 4), done)
+        }
+    }
+}
+
 const TaskBuilder = {
     clean: (dest) => taskMarker(() => del(dest), 'clean', 'Clear output directory'),
 
-    scripts: (entries, dest, scriptDir, webpackConfig, terserConfig, useSourcemaps, useMinify) => taskMarker(() => {
+    scripts: (entries, dest, scriptDir, webpackConfig, terserConfig, useSourcemaps, useMinify, memoize) => taskMarker(() => {
         const files = Object.values(entries);
         webpackConfig.entry = entries;
         webpackConfig.mode = useMinify ? 'production' : 'development';
@@ -34,10 +61,11 @@ const TaskBuilder = {
         if (useMinify) webpackConfig.plugins.push(new Terser(terserConfig));
         return gulp.src(files)
             .pipe(gulpWebpack(webpackConfig))
+            .pipe(memoize(entries, 'js', true))
             .pipe(gulp.dest(join(dest, scriptDir)));
     }, 'scripts'),
 
-    styles: (entries, dest, styleDir, useSourcemaps, useMinify) => taskMarker(() => {
+    styles: (entries, dest, styleDir, useSourcemaps, useMinify, memoize) => taskMarker(() => {
         const files = Object.values(entries);
         const reverse = Object.keys(entries).reduce((a, key) => ({ ...a, [entries[key]]: key }), {});
         const nameResolver = path => {
@@ -56,6 +84,7 @@ const TaskBuilder = {
             .pipe(sass({ importer: magicImporter() }).on('error', sass.logError))
             .pipe(postcss(contextOptions))
             .pipe(gulpIf(useSourcemaps, sourcemaps.write('.', { sourceRoot: finaldest })))
+            .pipe(memoize(entries, 'css', true))
             .pipe(gulp.dest(finaldest))
     }, 'styles'),
 
@@ -68,8 +97,6 @@ const TaskBuilder = {
         gulp.watch(join(srcPath, '/**/*.{scss, sass}'), styleTask);
         gulp.watch(join(srcPath, '/**/*.{js, mjs, es6}'), scriptTask);
     }, 'watcher'),
-
-    manifestGenerator: () => () => {},
 };
 
 module.exports = class GulpMeister {
@@ -181,12 +208,15 @@ module.exports = class GulpMeister {
     }
 
     build() {
+        const { memoize, manifest } = manifestGenerator(this.destinationPath, this.flags.manifest)
+
         const styles = TaskBuilder.styles(
             this.styleEntries,
             this.destinationPath,
             this.styleDir,
             this.flags.sourcemaps,
             this.flags.minify,
+            memoize,
         );
         const scripts = TaskBuilder.scripts(
             this.scriptEntries,
@@ -196,6 +226,7 @@ module.exports = class GulpMeister {
             this.terserConfig,
             this.flags.sourcemaps,
             this.flags.minify,
+            memoize,
         );
 
         // buildTasks - tasks that build assets
@@ -213,8 +244,8 @@ module.exports = class GulpMeister {
         let tasksList = [TaskBuilder.clean(this.destinationPath), buildTasks];
         if (overseerTasks.length > 0) tasksList.push(gulp.parallel(...overseerTasks));
 
-        return gulp.task(this.taskName, gulp.series(
-            ...tasksList
-        ));
+        if (this.flags.manifest) tasksList.push(manifest)
+
+        return gulp.task(this.taskName, gulp.series(...tasksList));
     }
 };

@@ -7,7 +7,7 @@
         "start": "gulp --watch --serve",
         "watch": "gulp --watch",
         "build:dev": "gulp",
-        "build:prod": "gulp --prod"
+        "build:prod": "gulp --prod --manifest"
     },
     "keywords": [],
     "author": "",
