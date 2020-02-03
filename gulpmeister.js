@@ -163,7 +163,7 @@ module.exports = class GulpMeister {
 
     optional(condition, truth, falsy) {
         if (condition) truth(this);
-        else falsy(this);
+        else if (falsy instanceof Function) falsy(this);
         return this
     }
 
