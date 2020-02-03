@@ -5,12 +5,15 @@ const rename = require('gulp-rename');
 const del = require('del');
 const gulpWebpack = require('webpack-stream');
 const browserSync = require('browser-sync').create();
-const { join } = require('path');
+const { join, basename } = require('path');
 const Terser = require('terser-webpack-plugin');
 const sass = require('gulp-sass');
 const gulpIf = require("gulp-if");
 const magicImporter = require('node-sass-magic-importer');
+const glob = require ('glob');
+const chalk = require ('chalk');
 
+// Use dart-sass for compile styles
 sass.compiler = require('sass');
 
 function taskMarker(fn, name, description) {
@@ -132,7 +135,17 @@ module.exports = class GulpMeister {
     }
 
     addStyleEntry(path, name) {
-        this.styleEntries[name] = path;
+        if (path.includes('*')) {
+            if (name) {
+                console.warn(
+                    '[' + chalk.red('GulpMeister.addStyleEntry') + '] ' +
+                    chalk.yellow('WARNING') + ': ' + chalk.magenta('[name]') +
+                    ' argument will be ignored, because you are specify path as glob pattern' );
+            }
+            glob.sync(path).forEach(file => this.styleEntries[basename(file, '.scss')] = file);
+        } else {
+            this.styleEntries[name] = path;
+        }
         return this
     }
 
