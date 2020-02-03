@@ -1,1 +1,7 @@
-last 2 versions
+# Browsers that we support
+
+> 0.1% in RU
+Last 2 versions
+ios>=7 # iPhone 4 is still alive
+not IE >= 1
+not dead
