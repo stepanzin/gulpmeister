@@ -14,5 +14,10 @@ module.exports = {
             }
         }
     },
-    plugins: []
+    plugins: [],
+    module: {
+        rules: [{
+            loader: "babel-loader",
+        }]
+    },
 };
