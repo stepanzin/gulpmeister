@@ -134,11 +134,11 @@ module.exports = class GulpMeister {
         return this
     }
 
-    addStyleEntry(path, name) {
+    addScssEntry(path, name) {
         if (path.includes('*')) {
             if (name) {
                 console.warn(
-                    '[' + chalk.red('GulpMeister.addStyleEntry') + '] ' +
+                    '[' + chalk.red('GulpMeister.addScssEntry') + '] ' +
                     chalk.yellow('WARNING') + ': ' + chalk.magenta('[name]') +
                     ' argument will be ignored, because you are specify path as glob pattern' );
             }
