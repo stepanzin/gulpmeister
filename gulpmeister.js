@@ -14,6 +14,8 @@ const glob = require ('glob');
 const chalk = require ('chalk');
 const { writeFile } = require('fs');
 const crypto = require('crypto');
+const plumber = require('gulp-plumber');
+const notify = require('gulp-notify');
 
 // Use dart-sass for compile styles
 sass.compiler = require('sass');
@@ -26,15 +28,15 @@ function taskMarker(fn, name, description) {
 
 function manifestGenerator(destinationPath, enabled) {
     const manifestData = {};
-    const buildHash = crypto.createHash('md4').update(crypto.randomBytes(20)).digest('hex').slice(-20)
+    const buildHash = crypto.createHash('md4').update(crypto.randomBytes(20)).digest('hex').slice(-20);
     return {
         memoize(files, ext, writeHash) {
-            const keys = Object.keys(files)
+            const keys = Object.keys(files);
             return rename(path => {
                 if (enabled) {
                     keys.forEach(entityName => {
                         if (path.basename.includes(entityName)) {
-                            if (writeHash) path.basename += `.${buildHash}`
+                            if (writeHash) path.basename += `.${buildHash}`;
                             manifestData[`${entityName}.${ext}`] = path.basename + path.extname;
                         }
                     })
@@ -43,7 +45,7 @@ function manifestGenerator(destinationPath, enabled) {
             })
         },
         manifest(done) {
-            const manifestDest = join(__dirname, destinationPath, 'manifest.json')
+            const manifestDest = join(__dirname, destinationPath, 'manifest.json');
             writeFile(manifestDest, JSON.stringify(manifestData, null, 4), done)
         }
     }
@@ -60,6 +62,11 @@ const TaskBuilder = {
         terserConfig.sourceMap = useSourcemaps;
         if (useMinify) webpackConfig.plugins.push(new Terser(terserConfig));
         return gulp.src(files)
+            .pipe(plumber({
+                errorHandler: notify.onError({
+                    message: 'Error: <%= error.message %>',
+                })
+            }))
             .pipe(gulpWebpack(webpackConfig))
             .pipe(memoize(entries, 'js', true))
             .pipe(gulp.dest(join(dest, scriptDir)));
@@ -79,6 +86,11 @@ const TaskBuilder = {
         const contextOptions = { useMinify };
 
         return gulp.src(files)
+            .pipe(plumber({
+                errorHandler: notify.onError({
+                    message: 'Error: <%= error.message %>',
+                })
+            }))
             .pipe(rename(nameResolver))
             .pipe(gulpIf(useSourcemaps, sourcemaps.init()))
             .pipe(sass({ importer: magicImporter() }).on('error', sass.logError))
@@ -208,7 +220,7 @@ module.exports = class GulpMeister {
     }
 
     build() {
-        const { memoize, manifest } = manifestGenerator(this.destinationPath, this.flags.manifest)
+        const { memoize, manifest } = manifestGenerator(this.destinationPath, this.flags.manifest);
 
         const styles = TaskBuilder.styles(
             this.styleEntries,
@@ -244,7 +256,7 @@ module.exports = class GulpMeister {
         let tasksList = [TaskBuilder.clean(this.destinationPath), buildTasks];
         if (overseerTasks.length > 0) tasksList.push(gulp.parallel(...overseerTasks));
 
-        if (this.flags.manifest) tasksList.push(manifest)
+        if (this.flags.manifest) tasksList.push(manifest);
 
         return gulp.task(this.taskName, gulp.series(...tasksList));
     }
