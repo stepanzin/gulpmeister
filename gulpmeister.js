@@ -26,13 +26,25 @@ function taskMarker(fn, name, description) {
     return fn
 }
 
+function reloadBrowser(done) {
+    browserSync.reload();
+    done();
+}
+
 function manifestGenerator(destinationPath, enabled) {
     const manifestData = {};
-    const buildHash = crypto.createHash('md4').update(crypto.randomBytes(20)).digest('hex').slice(-20);
+    const buildHash = crypto
+        .createHash('md4')
+        .update(crypto.randomBytes(20))
+        .digest('hex')
+        .slice(-20);
+
     return {
-        memoize(files, ext, writeHash) {
+        memoize(files, ext, writeHash, useSourcemaps = false) {
             const keys = Object.keys(files);
             return rename(path => {
+                // Don't write hash to .map files, it will break file associations
+                if (useSourcemaps && path.extname === '.map') return path;
                 if (enabled) {
                     keys.forEach(entityName => {
                         if (path.basename.includes(entityName)) {
@@ -52,64 +64,102 @@ function manifestGenerator(destinationPath, enabled) {
 }
 
 const TaskBuilder = {
-    clean: (dest) => taskMarker(() => del(dest), 'clean', 'Clear output directory'),
+    clean: (dest) => taskMarker(
+        () => del(dest),
+        'clean',
+        'Clear output directory'
+    ),
 
-    scripts: (entries, dest, scriptDir, webpackConfig, terserConfig, useSourcemaps, useMinify, memoize) => taskMarker(() => {
+    scripts: (
+        entries,
+        dest,
+        scriptDir,
+        webpackConfig,
+        terserConfig,
+        useSourcemaps,
+        useMinify,
+        memoize
+    ) => taskMarker(() => {
         const files = Object.values(entries);
         webpackConfig.entry = entries;
         webpackConfig.mode = useMinify ? 'production' : 'development';
+
         if (useSourcemaps) webpackConfig.devtool = 'cheap-source-map';
         terserConfig.sourceMap = useSourcemaps;
+
         if (useMinify) webpackConfig.plugins.push(new Terser(terserConfig));
+
         return gulp.src(files)
-            .pipe(plumber({
-                errorHandler: notify.onError({
-                    message: 'Error: <%= error.message %>',
-                })
-            }))
-            .pipe(gulpWebpack(webpackConfig))
-            .pipe(memoize(entries, 'js', true))
-            .pipe(gulp.dest(join(dest, scriptDir)));
+        .pipe(plumber({
+            errorHandler: notify.onError({
+                message: 'Error: <%= error.message %>',
+            })
+        }))
+        .pipe(gulpWebpack(webpackConfig))
+        .pipe(memoize(entries, 'js', true))
+        .pipe(gulp.dest(join(dest, scriptDir)))
     }, 'scripts'),
 
-    styles: (entries, dest, styleDir, useSourcemaps, useMinify, memoize) => taskMarker(() => {
+    styles: (
+        entries,
+        dest,
+        styleDir,
+        useSourcemaps,
+        useMinify,
+        useBrowserSync,
+        memoize,
+    ) => taskMarker(() => {
         const files = Object.values(entries);
         const reverse = Object.keys(entries).reduce((a, key) => ({ ...a, [entries[key]]: key }), {});
         const nameResolver = path => {
-            const oldname = files.find(filename => filename.includes(path.basename));
-            const newname = reverse[oldname];
-            if (newname) path.basename = newname;
+            const oldName = files.find(filename => filename.includes(path.basename));
+            const newName = reverse[oldName];
+            if (newName) path.basename = newName;
             return path;
         };
 
-        const finaldest = join(dest, styleDir);
+        const finalDest = join(dest, styleDir);
         const contextOptions = { useMinify };
 
         return gulp.src(files)
-            .pipe(plumber({
-                errorHandler: notify.onError({
-                    message: 'Error: <%= error.message %>',
-                })
-            }))
-            .pipe(rename(nameResolver))
-            .pipe(gulpIf(useSourcemaps, sourcemaps.init()))
-            .pipe(sass({ importer: magicImporter() }).on('error', sass.logError))
-            .pipe(postcss(contextOptions))
-            .pipe(gulpIf(useSourcemaps, sourcemaps.write('.', { sourceRoot: finaldest })))
-            .pipe(memoize(entries, 'css', true))
-            .pipe(gulp.dest(finaldest))
+        .pipe(plumber({
+            errorHandler: notify.onError({
+                message: 'Error: <%= error.message %>',
+            })
+        }))
+        .pipe(rename(nameResolver))
+        .pipe(gulpIf(useSourcemaps, sourcemaps.init()))
+        .pipe(sass({ importer: magicImporter() }).on('error', sass.logError))
+        .pipe(postcss(contextOptions))
+        .pipe(gulpIf(useSourcemaps, sourcemaps.write('.', { sourceRoot: finalDest })))
+        .pipe(memoize(entries, 'css', true, useSourcemaps))
+        .pipe(gulp.dest(finalDest))
+        .pipe(gulpIf(useBrowserSync, browserSync.stream()))
     }, 'styles'),
 
-    browserSync: (dest, browsersyncConfig) => taskMarker(() => {
-        browserSync.init(browsersyncConfig);
-        browserSync.watch(dest + '/**/*.*', browserSync.reload);
-    }, 'browsersync'),
+    browserSync: (browserSyncConfig) => taskMarker(() => {
+        browserSync.init(browserSyncConfig);
+    }, 'browserSync'),
 
-    watcher: (srcPath, styleTask, scriptTask) => taskMarker(() => {
+    watcher: (srcPath, styleTask, scriptTask, templateTask, useBrowserSync) => taskMarker(() => {
         const { join } = require('path').posix;
 
-        gulp.watch(join(srcPath, '/**/*.{scss, sass}'), styleTask);
-        gulp.watch(join(srcPath, '/**/*.{js, mjs, es6}'), scriptTask);
+        if (styleTask !== undefined) {
+            gulp.watch(join(srcPath, '/**/*.{scss, sass}'), styleTask);
+        }
+
+        if (scriptTask !== undefined) {
+            gulp.watch(
+                join(srcPath, '/**/*.{js, mjs, es6}'),
+                useBrowserSync
+                    ? gulp.series(scriptTask, reloadBrowser)
+                    : scriptTask
+            );
+        }
+
+        if (templateTask !== undefined) {
+            gulp.watch(join(srcPath, '/**/*.{twig, htm}'), templateTask);
+        }
     }, 'watcher'),
 };
 
@@ -125,12 +175,13 @@ module.exports = class GulpMeister {
         this.browsersyncConfig = null;
         this.webpackConfig = require('./webpack.config.js');
         this.babelConfig = {};
-        this.terserConfig = { sourceMap: false };
+        this.terserConfig = { sourceMap: false, extractComments: false };
         this.flags = {
             watch: false,
             minify: false,
             manifest: false,
             sourcemaps: false,
+            browserSync: false,
         }
     }
 
@@ -171,7 +222,7 @@ module.exports = class GulpMeister {
 
     setBrowserSyncConfig(config) {
         this.browsersyncConfig = config;
-        this.flags.watch = true;
+        this.flags.browserSync = true;
         return this
     }
 
@@ -230,6 +281,7 @@ module.exports = class GulpMeister {
             this.styleDir,
             this.flags.sourcemaps,
             this.flags.minify,
+            this.flags.browserSync,
             memoize,
         );
         const scripts = TaskBuilder.scripts(
@@ -248,11 +300,18 @@ module.exports = class GulpMeister {
 
         // overseerTasks - tasks that watch for changes (e.g. watcher, browserSync)
         let overseerTasks = [];
-        if (this.flags.watch) overseerTasks.push(TaskBuilder.watcher(this.sourcePath, styles, scripts));
         if (this.browsersyncConfig !== null) {
-            // TODO: Move hardcoded string to this.browserSyncWatchFolder variable
-            overseerTasks.push(TaskBuilder.browserSync('./dist', this.browsersyncConfig));
+            overseerTasks.push(TaskBuilder.browserSync(this.browsersyncConfig));
         }
+        if (this.flags.watch) overseerTasks.push(
+            TaskBuilder.watcher(
+                this.sourcePath,
+                styles,
+                scripts,
+                this.flags.browserSync ? reloadBrowser : undefined,
+                this.flags.browserSync,
+            )
+        );
 
         // tasksList - list of tasks to be passed as arguments to gulp.series
         let tasksList = [TaskBuilder.clean(this.destinationPath), buildTasks];
