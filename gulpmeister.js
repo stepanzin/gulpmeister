@@ -106,6 +106,8 @@ const TaskBuilder = {
     }, 'browsersync'),
 
     watcher: (srcPath, styleTask, scriptTask) => taskMarker(() => {
+        const { join } = require('path').posix;
+
         gulp.watch(join(srcPath, '/**/*.{scss, sass}'), styleTask);
         gulp.watch(join(srcPath, '/**/*.{js, mjs, es6}'), scriptTask);
     }, 'watcher'),
